@@ -4,6 +4,39 @@ This is a guide to get the Ryzen 7000 series processors with AMD Radeon 680M/780
 
 [![project chat](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://isc30.zulipchat.com/join/36je7erap524zo5hh2gjohyx/)
 
+## My tiny contribution to this project: specificalities for the Minisforum BD975m
+
+First of all, thank you so much to [isc30](https://github.com/isc30) for putting this [great project](https://github.com/isc30/ryzen-gpu-passthrough-proxmox) together and updating it regularly based on the other users' feedback! :smile:
+
+**The following applies to the 7945HX variant of the Minisforum BD795m.**
+
+I found out that the other existing ROMs for the same CPU (i.e., `vbios_7945hx.bin` and `vbios_7945hx_MS-A2.bin`, at the time of writing) do not seem to load properly.
+I compiled the `.bin` that worked for me (`vbios_7945hx_igpu_minisforumbd795m.bin`) using the `vbios.c` code found in the guide below. *If anyone else wonders, turning off secure boot is not required to compile the ROM properly in this case, unlike with other ROMs.*
+
+With the Minisforum BD795m, the real trick was **NOT to add** the instruction `args: -cpu 'host,-hypervisor,kvm=off'` to the `.conf` file of the VM. In fact, adding this option resulted in the VM booting correctly but with the amdgpu module not allowed to load (failing with **error 22**, as reported by `dmesg` in the guest OS).
+
+Final VM configuration (only parts that matter; **notice the lack of the** `args: -cpu ...` **instruction at the beginning!**):
+```
+root@pve-minisbd795m:~# cat /etc/pve/qemu-server/103.conf
+bios: ovmf
+cpu: host
+hostpci0: 0000:05:00.0,pcie=1,romfile=vbios_7945hx_igpu_minisforumbd795m.bin,x-vga=1
+hostpci1: 0000:05:00.1,pcie=1
+machine: q35
+```
+
+Final config file to specify the vfio-pci module options:
+```
+root@pve-minisbd795m:~# cat /etc/modprobe.d/vfio.conf
+softdep amdgpu pre: vfio-pci
+softdep snd_hda_intel pre: vfio-pci
+options vfio-pci ids=1002:164e,1002:1640
+```
+
+For the rest, my Proxmox setup is the same as instructed in the original guide. I tested this on a VM with an Ubuntu (24.04) guest, and it worked perfectly, even with the pre-installed open-source amdgpu drivers (if you don't need the best performance ever, it's convenient to stick with those).
+
+Below is the original guide.
+
 ## Confirmed list of Proxmox versions that work:
 
 - [x] Proxmox 7.4
